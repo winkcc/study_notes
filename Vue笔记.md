@@ -18,7 +18,7 @@ npm -v  #查看包管理工具npm版本
 
 创建两个文件夹 `node_global` 、`node_cache`
 
-![1656086918494](G:\Desktop\学习笔记\Vue笔记.assets\1656086918494.png)
+![1656086918494](Vue笔记.assets\1656086918494.png)
 
 打开cmd,设置路径
 
@@ -31,7 +31,7 @@ npm config set cache "G:\Project\node\node_cache"
 
 1.修改用户变量中的Path
 
-<img src="G:\Desktop\学习笔记\Vue笔记.assets\1656089032984.png" style="zoom:80%"/> 
+<img src="Vue笔记.assets\1656089032984.png" style="zoom:80%"/> 
 
 2.新建系统环境变量 NODE_PATH
 
@@ -84,7 +84,7 @@ npm run serve
 
 #### 分析目录结构
 
-![1656143018271](G:\Desktop\学习笔记\Vue笔记.assets\1656143018271.png)
+![1656143018271](Vue笔记.assets\1656143018271.png)
 
 - node_modules 所有依赖项
 - public 静态内容
