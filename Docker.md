@@ -74,12 +74,13 @@ yum remove docker \
             docker-logrotate \
             docker-engine
 # 2、下载安装包
+yum -y install gcc
+yum -y install gcc-c++
 yum install -y yum-utils
 # 3、配置镜像地址
 
 									# 默认是国外的 不用
-yum-config-manager --add-repo
-https://download.docker.com/linux/centos/docker-ce.repo
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
 									# 使用国内阿里云的
 yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
@@ -90,7 +91,7 @@ yum install docker-ce docker-ce-cli containerd.io
 # 6、启动docker
 systemctl start docker
 # 7、测试
-docker -version
+docker version
 docker run hello-world
 
 # 8、卸载
@@ -552,7 +553,7 @@ docker的镜像实际上由一层一层的文件系统组成，这种层级的�
 
 
 
-## Commit镜像
+### Commit镜像
 
 ```bash
 docker commit 提交容器为一个新副本
@@ -566,23 +567,676 @@ docker commit -a="wink" -m="no tomcat docs"  1e98a2f815b0 tomcat02:1.1
 
 ## 容器数据卷
 
+数据不应该放在容器里面，for example Mysql 容器删除数据也无了。
+
+容器之间应该有一个数据共享技术 Docker容器产生数据，同步到本地。
+
+所以需要容器数据卷
+
+### 使用数据卷
+
+> 方式一：直接用命令挂载
+
+```bash
+docker run -it -v 主机目录：容器目录 镜像名
+
+
+docker inspect 容器id 查看容器信息
+```
 
 
 
+![1658736470285](G:\Desktop\Study_notes\Docker.assets\1658736470285.png)
+
+### DockerFile挂载
+
+用来构建docker镜像的构建文件  命令脚本
+
+> 方式二：用dockerfile脚本命令挂载
+
+```bash
+# 创建dockerfile文件
+mkdir docker-test-volume
+cd docker-test-volume
+vim dockerfile1
+
+# 脚本
+FROM centos
+
+VOLUME ["volume01","volume02"]
+
+
+CMD echo "======end========"
+CMD /bin/bash
+
+# 执行
+docker build -f dockerfile1 -t wink/centos:1.0 .
+
+```
+
+
+
+### 实战 Mysql
+
+```bash
+docker run -d -p 3310:3306 -v /home/mysql/conf:/etc/mysql/conf.d \
+-v /home/mysql/data:/var/lib/mysql \
+-e MYSQL_ROOT_PASSWORD=123456 --name mysql01 mysql:5.7
+
+-d 后台运行
+-p 端口映射
+-v 卷挂载
+-e 环境配置
+--name 容器名称
+
+# navicat测试连接
+
+```
+
+![1658741432605](G:\Desktop\Study_notes\Docker.assets\1658741432605.png)
+
+### 具名挂载 匿名挂载
+
+```BASH
+# ==================================匿名挂载==========================
+-v 容器内路径
+docker run -d -P --name nginx01 -v /etc/nginx nginx
+# 匿名挂载的缺点，就是不好维护，通常使用命令 docker volume维护
+docker volume ls
+
+#[root@winklinux /]# docker run -d -P --name nginx01 -v /etc/nginx nginx
+#7649d0505c8eb0f819dca3f64645ffc069c288c8ef660d56a099870b2686eca6
+#[root@winklinux /]# docker volume ls
+#DRIVER    VOLUME NAME
+#local     08fb1be8560006f3d05c3a52a47e43f4e3897354e0da6d1a12cf365d237efb58
+
+# ==================================具名挂载==========================
+-v 卷名:/容器内路径
+docker run -d -P --name nginx02 -v nginxconfig:/etc/nginx nginx
+# 查看挂载的路径
+[root@winklinux /]# docker volume inspect nginxconfig
+[
+    {
+        "CreatedAt": "2022-07-25T17:46:45+08:00",
+        "Driver": "local",
+        "Labels": null,
+        "Mountpoint": "/var/lib/docker/volumes/nginxconfig/_data",
+        "Name": "nginxconfig",
+        "Options": null,
+        "Scope": "local"
+    }
+]
+
+# 判断挂载的是卷名而不是本机目录名？
+不是/开始就是卷名，是/开始就是目录名
+# 改变文件的读写权限
+# ro: readonly
+# rw: readwrite
+docker run -d -P --name nginx02 -v nginxconfig:/etc/nginx:ro nginx
+docker run -d -P --name nginx02 -v nginxconfig:/etc/nginx:rw nginx
+# ro只能通过宿主机操作 容器内无法操作
+
+```
+
+### 数据卷容器
+
+
+
+多个容器同步数据
+
+```bash
+# 创建centos01
+docker run -it --name centos01 c5f41dd1998b
+```
+
+![1658747028262](G:\Desktop\Study_notes\Docker.assets\1658747028262.png)
+
+```bash
+ # 创建centos02并同步01的挂载
+ docker run -it --name centos02 --volumes-from centos01 c5f41dd1998b
+ --volumes-from 容器 
+```
+
+![1658747182470](G:\Desktop\Study_notes\Docker.assets\1658747182470.png)
+
+
+
+测试
+
+```bash
+
+# centos02 创建文件
+[root@93ee2680fc0a /]# cd volume01
+[root@93ee2680fc0a volume01]# touch vol02
+[root@93ee2680fc0a volume01]# ls
+vol02
+# centos01 查看存在
+[root@winklinux data]# docker attach centos01   #进入cetos01容器
+[root@e18017f01bb3 /]# ls
+bin  dev  etc  home  lib  lib64  lost+found  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var  volume01	volume02
+[root@e18017f01bb3 /]# cd volume01
+[root@e18017f01bb3 volume01]# ls
+vol02
+
+```
 
 ## DockerFile
 
+### 介绍
+
+用来构建docker镜像
+
+构建步骤
+
+1. 编写一个dockerfile文件
+2. docker build构建成为一个镜像
+3. docker run运行镜像
+4. docker push 发布镜像（DockerHub、阿里云镜像仓库）
 
 
 
+官方做法
+
+![1658764176497](G:\Desktop\Study_notes\Docker.assets\1658764176497.png)
+
+
+
+### 构建过程
+
+**基础知识**
+
+1、每条保留字指令尽量为大写字母且后面要跟随至少一个参数
+2、指令按照从上到下，顺序执行
+3、每条指令都会创建一个新的镜像层，并对镜像进行提交
+
+### DockerFile命令
+
+```bash
+FROM		# 基础镜像，一切从这里构建
+MAINTAINER	# 镜像是谁写的，姓名+邮箱
+RUN			# 镜像构建时需要运行的命令
+ADD			# 步骤: 比如创建的是centos镜像 在添加一个tomcat
+WORKDIR		# 镜像工作目录
+VOLUME		# 挂载的目录
+EXPOST		# 声明端口
+CMD			# 指定容器启动时运行的命令，只有最后一个生效，替换
+ENTRYPOINT	# 指定容器启动时运行的命令，追加
+ONBUILD		# 当构建一个被继承DockerFile 这时候就会运行ONBUILD指令 触发指令
+COPY		# 类似ADD 将文件拷贝到镜像中
+ENV			# 构建时设置环境变量
+```
+
+![1658766507137](G:\Desktop\Study_notes\Docker.assets\1658766507137.png)
+
+### 实战 创建自己的centos
+
+
+
+```bash
+# 1、编写DockerFile文件 
+mkdir dockerfile
+
+[root@winklinux dockerfile]# vim mydockerfile-centos
+[root@winklinux dockerfile]# cat mydockerfile-centos 
+FROM centos:7
+MAINTAINER winkcc<2440729891@qq.com>
+
+ENV MYPATH /usr/local
+WORKDIR $MYPATH
+
+RUN yum -y install vim
+RUN yum -y install net-tools
+
+EXPOSE 80
+CMD echo $MYPATH
+CMD echo "---end---"
+CMD /bin/bash
+# 2、通过docker build 镜像
+docker build -f mydockerfile-centos -t winkcentos:0.1 .
+
+Successfully built f142e68e5697
+Successfully tagged winkcentos:0.1
+# 3、测试运行
+docker run -it winkcentos:0.1
+
+# 查看构建信息
+docker history f142e68e5697
+
+
+```
+
+
+
+![1658768973208](G:\Desktop\Study_notes\Docker.assets\1658768973208.png)
+
+> CMD 和 ENTRYPOINT 的区别
+
+`CMD`：Dockerfile 中可以有多个CMD 指令，但只有最后一个生效，CMD 会被 docker run 之后的参数
+替换
+`ENTRYPOINT`： docker run 之后的参数会被当做参数传递给 ENTRYPOINT，之后形成新的命令组合！
+测试
+
+```
+docker run mycentos -??
+
+cmd 的-？？是替换
+entrypoint的 -？？ 是追加
+```
+
+### 发布镜像
+
+> 发布到Dockerhub  https://hub.docker.com/   首先注册一个账号
+
+```bash
+# 登录
+docker login -u winkcc
+Password: 
+
+# 发布 
+docker tag feb5d9fea6a5 winkcc/hello-world:1.0  # 添加tag
+docker push winkcc/hello-world:1.0				# push
+
+```
+
+发布成功
+
+![1658822239144](G:\Desktop\Study_notes\Docker.assets\1658822239144.png)
+
+
+
+> 发布到阿里云镜像
+
+登录阿里云
+
+容器镜像服务
+
+创建镜像仓库
+
+![1658823781928](G:\Desktop\Study_notes\Docker.assets\1658823781928.png)
+
+本地仓库
+
+```bash
+# 登录阿里云
+docker login --username=winkicc registry.cn-hangzhou.aliyuncs.com
+
+# 拉取
+docker pull registry.cn-hangzhou.aliyuncs.com/winkcc/winkcc:[镜像版本号]
+# 推送
+docker tag [ImageId] registry.cn-hangzhou.aliyuncs.com/winkcc/winkcc:[镜像版本号]
+docker push registry.cn-hangzhou.aliyuncs.com/winkcc/winkcc:[镜像版本号]
+```
+
+![1658824136569](G:\Desktop\Study_notes\Docker.assets\1658824136569.png)
+
+### 小结
+
+![1658824413482](G:\Desktop\Study_notes\Docker.assets\1658824413482.png)
 
 ## Docker 网络
 
+### 理解Docker0
+
+```bash
+#测试 
+ip addr
+```
+
+![1658825324568](G:\Desktop\Study_notes\Docker.assets\1658825324568.png)
+
+```bash
+# tomcat
+docker run -d -P --name tomcat01 tomcat:9
+
+docker exec -it tomcat01 ip addr   	#如果不存在指令则需要进入容器执行 apt update&&apt install -y iproute2
+可以ping通
+```
+
+![1658826941799](G:\Desktop\Study_notes\Docker.assets\1658826941799.png)
+
+> 原理
+
+每一个安装了Docker的linux主机都有一个docker0的虚拟网卡。这是个桥接网卡，使用了veth-pair技术！
+
+再次ip addr  多了一个网卡 
+
+![1658827146381](G:\Desktop\Study_notes\Docker.assets\1658827146381.png)
+
+![1658828540181](G:\Desktop\Study_notes\Docker.assets\1658828540181.png)
+
+### --link 弃用
+
+修改host文件
+
+### 自定义网络
+
+```bash
+docker network ls
+```
+
+
+
+![1658831206292](G:\Desktop\Study_notes\Docker.assets\1658831206292.png)
+
+
+
+```bash
+# 正常启动
+docker run -d -P --name tomcat01 tomcat  # 默认 --net
+docker run -d -P --name tomcat01 --net bridge tomcat
+
+# 自定义网络
+docker network create --driver bridge --subnet 192.168.0.0/16 --gateway 192.168.0.1 mynet
+
+# 使用自定义网络
+docker run -d -P --name tomcat-net-01 --net mynet tomcat
+docker run -d -P --name tomcat-net-02 --net mynet tomcat
+# 进入tomcat-net-01后可以直接用name ping通tomcat-net-02
+```
+
+### 网络联通
+
+不同网卡
+
+![1658834467533](G:\Desktop\Study_notes\Docker.assets\1658834467533.png)
+
+
+
+```bash
+docker network connect mynet tomcat01
+			       #自己的网卡  连接docker0的容器
+```
+
+### 实战 部署Redis集群
+
+```bash
+# 创建网卡
+docker network create redis --subnet 172.38.0.0/16
+# 通过脚本创建六个redis配置
+for port in $(seq 1 6); \
+do \
+mkdir -p /mydata/redis/node-${port}/conf
+touch /mydata/redis/node-${port}/conf/redis.conf
+cat << EOF >/mydata/redis/node-${port}/conf/redis.conf
+port 6379
+bind 0.0.0.0
+cluster-enabled yes
+cluster-config-file nodes.conf
+cluster-node-timeout 5000
+cluster-announce-ip 172.38.0.1${port}
+cluster-announce-port 6379
+cluster-announce-bus-port 16379
+appendonly yes
+EOF
+done
+# 结果
+[root@winklinux mydata]# cd redis/
+[root@winklinux redis]# ls
+node-1  node-2  node-3  node-4  node-5  node-6
+
+# 运行容器
+# 示例
+docker run -p 637${port}:6379 -p 1637${port}:16379 --name redis-${port} \
+-v /mydata/redis/node-${port}/data:/data \
+-v /mydata/redis/node-${port}/conf/redis.conf:/etc/redis/redis.conf \
+-d --net redis --ip 172.38.0.1${port} redis:5.0.9-alpine3.11 redis-server
+/etc/redis/redis.conf; \
+
+
+# 1-6
+docker run -p 6371:6379 -p 1637${port}:16379 --name redis-1 \
+-v /mydata/redis/node-1/data:/data \
+-v /mydata/redis/node-1/conf/redis.conf:/etc/redis/redis.conf \
+-d --net redis --ip 172.38.0.11 redis:5.0.9-alpine3.11 redis-server
+/etc/redis/redis.conf; \
+
+# 进入一个redis，注意这里是 sh命令
+docker exec -it redis-1 /bin/sh
+# 创建集群
+redis-cli --cluster create 172.38.0.11:6379 172.38.0.12:6379
+172.38.0.13:6379 172.38.0.14:6379 172.38.0.15:6379 172.38.0.16:6379 --
+cluster-replicas 1
+# 连接集群
+redis-cli -c
+# 查看集群信息
+cluster info
+# 查看节点
+cluster nodes
+# set a b
+# 停止到存值的容器
+# 然后再次get a，发现依旧可以获取值
+# 查看节点，发现高可用完全没问题
+```
 
 
 
 
 
+## SpringBoot微服务打包Docker镜像
+
+1、构建SpringBoot项目
+
+2、打包应用
+
+3、编写dockerfile
+
+```bash
+FROM java:8
+# 服务器只有dockerfile和jar在同级目录
+COPY *.jar /app.jar
+CMD ["--server.port=8080"]
+# 指定容器内要暴露的端口
+EXPOSE 8080
+ENTRYPOINT ["java","-jar","/app.jar"]
+```
+
+4、构建镜像
+
+```bash
+# 相同目录下
+-rw-r--r-- 1 root root 17634294 May 14 12:33 demo-0.0.1-SNAPSHOT.jar
+-rw-r--r-- 1 root root 207 May 14 12:32 Dockerfile
+# 构建镜像
+docker build -t myjar .
+
+```
+
+5、发布运行
+
+```bash
+# 运行
+docker run -d -P --name myjar myjar
+```
+
+## Docker Compose
+
+### 简介
+
+DockerFile build run 手动操作，单个容器！
+微服务。100个微服务！依赖关系。
+Docker Compose 来轻松高效的管理容器i。定义运行多个容器。
+
+> 定义和运行多个容器
+
+**三步骤：**
+
+Using Compose is basically a three-step process:
+1. Define your app’s environment with a `Dockerfile` so it can be reproduced anywhere.
+
+  - Dockerfile 保证我们的项目在任何地方可以运行。
+2. Define the services that make up your app in `docker-compose.yml` so they can be runtogether in an isolated environment.
+
+  - services 什么是服务。
+
+  - docker-compose.yml 这个文件怎么写！
+3. Run `docker-compose up` and Compose starts and runs your entire app.
+
+  - 启动项目
+
+**作用：批量容器编排。**
+
+Compose
+
+```yaml
+# 官方文档
+version: '2.0'
+services:
+	web:
+		build: .
+		ports:
+		- "5000:5000"
+		volumes:
+		- .:/code
+		- logvolume01:/var/log
+		links:
+		- redis
+	redis:
+		image: redis
+volumes:
+	logvolume01: {}
+```
+
+Compose ：重要的概念。
+
+- 服务services， 容器。应用。（web、redis、mysql....）
+- 项目project。 一组关联的容器。 博客。web、mysql。
+
+### 安装
+
+最新已集成
+
+![1658848377800](G:\Desktop\Study_notes\Docker.assets\1658848377800.png)
+
+### 使用
+
+
+
+```bash
+# 第一步
+mkdir composetest
+cd composetest
+
+vim app.py
+#########################app.py#############################
+import time
+
+import redis
+from flask import Flask
+
+app = Flask(__name__)
+cache = redis.Redis(host='redis', port=6379)
+
+def get_hit_count():
+    retries = 5
+    while True:
+        try:
+            return cache.incr('hits')
+        except redis.exceptions.ConnectionError as exc:
+            if retries == 0:
+                raise exc
+            retries -= 1
+            time.sleep(0.5)
+
+@app.route('/')
+def hello():
+    count = get_hit_count()
+    return 'Hello World! I have been seen {} times.\n'.format(count)
+#########################app.py#############################
+vim requirements.txt
+
+flask
+redis
+# 第二步
+vim Dockerfile
+#########################Dockerfile#############################
+# syntax=docker/dockerfile:1
+FROM python:3.7-alpine
+WORKDIR /code
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+RUN apk add --no-cache gcc musl-dev linux-headers
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+EXPOSE 5000
+COPY . .
+CMD ["flask", "run"]
+#########################Dockerfile#############################
+
+# 第三步
+vim docker-compose.yml
+#########################docker-compose.yml#############################
+version: "2.4.1"
+services:
+  web:
+    build: .
+    ports:
+      - "8000:5000"
+  redis:
+    image: "redis:alpine"
+#########################docker-compose.yml#############################
+
+# 第四步
+curl -L https://get.daocloud.io/docker/compose/releases/download/1.25.5/docker compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
+sudo curl -L "https://github.com/docker/compose/releases/download/1.26.2/dockercompose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+```
+
+![1658850994665](G:\Desktop\Study_notes\Docker.assets\1658850994665.png)
+
+
+
+
+
+## Docker Swarm
+
+> 集群
+
+简单学习
+
+![1658901762880](G:\Desktop\Study_notes\Docker.assets\1658901762880.png)
+
+```bash
+# 初始化节点
+docker swarm init --advertise9addr 自己的ip
+
+# 获取令牌
+docker swarm join-token manager
+docker swarm join-token worker
+# 其余的节点输入令牌
+
+```
+
+动态扩缩容
+
+```bash
+# 主节点 
+docker service create -p 8888:80 --name mynginx nginx
+# 扩容
+docker service update --replicas 3 mynginx # 集群多了三个mynginx容器
+docker service scale mynginx=5 #也是扩容
+
+# 移除服务 
+docker  service rm mynginx
+
+```
+
+**概念总结**
+
+`swarm`
+集群的管理和编号。 docker可以初始化一个 swarm 集群，其他节点可以加入。（管理、工作者）
+`Node`
+就是一个docker节点。多个节点就组成了一个网络集群。（管理、工作者）
+`Service`
+任务，可以在管理节点或者工作节点来运行。核心。！用户访问！
+`Task`
+容器内的命令，细节任务！
+
+![1658904025810](G:\Desktop\Study_notes\Docker.assets\1658904025810.png)
+
+
+
+
+
+## CI/CD之Jenkins
 
 
 
